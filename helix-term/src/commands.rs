@@ -436,6 +436,7 @@ impl MappableCommand {
         record_macro, "Record macro",
         replay_macro, "Replay macro",
         command_palette, "Open command palette",
+        switch_between_header_and_source, "Switch between header and source",
     );
 }
 
@@ -2466,6 +2467,58 @@ pub fn command_palette(cx: &mut Context) {
             compositor.push(Box::new(overlayed(picker)));
         },
     ));
+}
+
+fn switch_between_header_and_source(cx: &mut Context) {
+    let doc = doc!(cx.editor);
+
+    let path = match doc.path() {
+        None => return,
+        Some(path) => path,
+    };
+    let extension = match path.extension() {
+        None => return,
+        Some(extension) => extension,
+    };
+    let extension_str = match extension.to_str() {
+        None => return,
+        Some(extension_str) => extension_str,
+    };
+
+    let mut new_path = path.clone();
+    match extension_str {
+        "c" => {
+            try_switch_extension_to("h", &mut new_path, &mut cx.editor);
+        }
+        "cpp" => {
+            if !try_switch_extension_to("h", &mut new_path, &mut cx.editor) {
+                try_switch_extension_to("hpp", &mut new_path, &mut cx.editor);
+            }
+        }
+        "h" => {
+            if !try_switch_extension_to("c", &mut new_path, &mut cx.editor) {
+                try_switch_extension_to("cpp", &mut new_path, &mut cx.editor);
+            }
+        }
+        "hpp" => {
+            try_switch_extension_to("cpp", &mut new_path, &mut cx.editor);
+        }
+        _ => return,
+    }
+}
+
+fn try_switch_extension_to(extension: &str, path_buf: &mut PathBuf, editor: &mut Editor) -> bool {
+    path_buf.set_extension(extension);
+    if !path_buf.exists() {
+        return false;
+    }
+    return match editor.open(path_buf, Action::Replace) {
+        Ok(_) => true,
+        Err(err) => {
+            log::error!("error switching between header and source: {}\n", err);
+            false
+        }
+    };
 }
 
 fn last_picker(cx: &mut Context) {
